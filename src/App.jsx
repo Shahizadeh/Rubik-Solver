@@ -4,6 +4,10 @@ import { parseMove, parseSequence } from './cube/notation.js';
 import { loadCube, saveCube } from './storage.js';
 import { usePwa } from './pwa/usePwa.js';
 import ShareDialog from './components/ShareDialog.jsx';
+import ImportDialog from './components/ImportDialog.jsx';
+import SolveGuide from './components/SolveGuide.jsx';
+import { solveFacelets } from './solver/solver.js';
+import { invert } from './cube/notation.js';
 import './App.css';
 
 const ShareIcon = () => (
@@ -78,6 +82,11 @@ export default function App() {
   const [angle, setAngle] = useState(loadAngle);
   const [shareOpen, setShareOpen] = useState(false);
   const pwa = usePwa();
+  const [importOpen, setImportOpen] = useState(false);
+  // Step-by-step solution being followed: { moves, index, playing } or null.
+  const [guide, setGuide] = useState(null);
+  const [findingSolution, setFindingSolution] = useState(false);
+  const [guideError, setGuideError] = useState('');
 
   // Read the saved cube once; kept in state so React's dev double-mount
   // restores the same save both times.
@@ -96,6 +105,8 @@ export default function App() {
       saveCube(s.history);
     });
     engineRef.current = engine;
+    // Turning the cube by hand leaves the step-by-step guide behind.
+    engine.onUserMove = () => setGuide(null);
     if (savedMoves.length) engine.restore(savedMoves);
     return () => {
       engine.dispose();
@@ -121,11 +132,26 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
-  // How much of the cube view the open drawer covers on phones.
-  const bottomInset = isPhone && panelOpen ? drawerHeight : 0;
+  // Height taken by the bottom dock (guide card + floating buttons).
+  const dockRef = useRef(null);
+  const [dockHeight, setDockHeight] = useState(0);
   useEffect(() => {
-    engineRef.current?.setBottomInset(bottomInset);
-  }, [bottomInset]);
+    const el = dockRef.current;
+    const ro = new ResizeObserver(() =>
+      setDockHeight(el.offsetHeight + (parseFloat(getComputedStyle(el).bottom) || 0)),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // How much of the cube view the open drawer covers on phones (the dock
+  // rides up by this much), and how much the cube must stay clear of: the
+  // drawer plus, while the guide card is showing, the dock itself.
+  const bottomInset = isPhone && panelOpen ? drawerHeight : 0;
+  const cubeInset = bottomInset + (guide ? dockHeight : 0);
+  useEffect(() => {
+    engineRef.current?.setBottomInset(cubeInset);
+  }, [cubeInset]);
 
   useEffect(() => {
     engineRef.current?.setControlMode(mode);
@@ -147,16 +173,76 @@ export default function App() {
     }
   }, [angle]);
 
-  const turn = useCallback((token) => engineRef.current?.move(parseMove(token)), []);
+  const turn = useCallback((token) => {
+    setGuide(null);
+    engineRef.current?.move(parseMove(token));
+  }, []);
+
+  /** Runs a cube action that isn't part of the guide (and so ends it). */
+  const act = (fn) => {
+    setGuide(null);
+    setGuideError('');
+    fn();
+  };
+
+  // ---- step-by-step solving -------------------------------------------
+
+  const guideNext = () => {
+    if (!guide || guide.index >= guide.moves.length) return;
+    engineRef.current.move(guide.moves[guide.index]);
+    setGuide({ ...guide, index: guide.index + 1 });
+  };
+
+  const guideBack = () => {
+    if (!guide || guide.index === 0) return;
+    engineRef.current.move(invert(guide.moves[guide.index - 1]));
+    setGuide({ ...guide, index: guide.index - 1 });
+  };
+
+  // Play: make the next move once the previous one has finished turning.
+  useEffect(() => {
+    if (!guide?.playing || state.busy || guide.index >= guide.moves.length) return;
+    const t = setTimeout(() => {
+      engineRef.current.move(guide.moves[guide.index]);
+      setGuide({ ...guide, index: guide.index + 1 });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [guide, state.busy]);
+
+  /** Finds the shortest-ish solution for whatever is on the 3D cube now. */
+  const solveStepByStep = async () => {
+    setGuideError('');
+    setFindingSolution(true);
+    try {
+      const moves = await solveFacelets(engineRef.current.getFacelets());
+      setGuide({ moves, index: 0, playing: false });
+      setPanelOpen(false);
+    } catch (err) {
+      setGuideError(err.message || 'Could not find a solution.');
+    } finally {
+      setFindingSolution(false);
+    }
+  };
+
+  /** Sets the 3D cube to an imported state and starts guiding its solution. */
+  const applyImport = async (facelets) => {
+    const moves = await solveFacelets(facelets); // throws a user-facing message
+    // Undoing the solution from solved recreates the imported state exactly.
+    engineRef.current.restore(moves.slice().reverse().map(invert));
+    setGuide({ moves, index: 0, playing: false });
+    setImportOpen(false);
+    setPanelOpen(false);
+  };
 
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT') return;
-      if (e.target.closest?.('dialog')) return; // keys inside the share dialog
+      if (e.target.closest?.('dialog')) return; // keys inside a dialog
       const letter = e.key.toUpperCase();
       if (FACE_BUTTONS.includes(letter)) {
         turn(e.shiftKey ? `${letter}'` : letter);
       } else if (e.key === 'Backspace') {
+        setGuide(null);
         engineRef.current?.undo();
       } else if (e.key === ' ' && e.target.tagName !== 'BUTTON') {
         e.preventDefault();
@@ -250,53 +336,65 @@ export default function App() {
           ))}
         </div>
 
-        {/* Floating buttons; on phones they ride up with the drawer. */}
-        <div className="fabs">
-          <button
-            className="panel-toggle"
-            onClick={() => setPanelOpen((o) => !o)}
-            aria-expanded={panelOpen}
-            aria-controls="panel"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-              {panelOpen ? (
-                <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" fill="currentColor" />
-              ) : (
-                <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" fill="currentColor" />
-              )}
-            </svg>
-            <span>{panelOpen ? 'Hide' : 'Controls'}</span>
-          </button>
-
-          <div className="fab-group">
+        {/* Guide card and floating buttons; on phones they ride up with the drawer. */}
+        <div className="dock" ref={dockRef}>
+          {guide && (
+            <SolveGuide
+              guide={guide}
+              busy={busy}
+              onBack={guideBack}
+              onNext={guideNext}
+              onTogglePlay={() => setGuide({ ...guide, playing: !guide.playing })}
+              onClose={() => setGuide(null)}
+            />
+          )}
+          <div className="fabs">
             <button
-              className="fab"
-              onClick={() => setShareOpen(true)}
-              title="Share with a QR code"
-              aria-label="Share app"
+              className="panel-toggle"
+              onClick={() => setPanelOpen((o) => !o)}
+              aria-expanded={panelOpen}
+              aria-controls="panel"
             >
-              <ShareIcon />
-              <span>Share</span>
-            </button>
-
-            <button
-              className="fab"
-              onClick={() => engine().straighten()}
-              title="Straighten view (Space)"
-              aria-label="Straighten view"
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path
-                  d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
-                  fill="currentColor"
-                />
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                {panelOpen ? (
+                  <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" fill="currentColor" />
+                ) : (
+                  <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" fill="currentColor" />
+                )}
               </svg>
-              <span>Straighten</span>
+              <span>{panelOpen ? 'Hide' : 'Controls'}</span>
             </button>
+
+            <div className="fab-group">
+              <button
+                className="fab"
+                onClick={() => setShareOpen(true)}
+                title="Share with a QR code"
+                aria-label="Share app"
+              >
+                <ShareIcon />
+                <span>Share</span>
+              </button>
+
+              <button
+                className="fab"
+                onClick={() => engine().straighten()}
+                title="Straighten view (Space)"
+                aria-label="Straighten view"
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <path
+                    d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span>Straighten</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <p className="hint">
+        <p className={`hint ${guide ? 'hidden' : ''}`}>
           <span className="fine">
             Drag a face to turn it · drag the background to rotate · scroll to zoom
           </span>
@@ -310,21 +408,41 @@ export default function App() {
         <h1>Rubik&apos;s Cube</h1>
 
         <div className="actions">
-          <button className="primary" onClick={() => engine().shuffle(25)} disabled={busy}>
+          <button className="primary" onClick={() => act(() => engine().shuffle(25))} disabled={busy}>
             Shuffle
           </button>
           <button
             className="primary solve"
-            onClick={() => engine().solve()}
+            onClick={() => act(() => engine().solve())}
             disabled={busy || history.length === 0}
           >
             Solve
           </button>
-          <button onClick={() => engine().undo()} disabled={busy || history.length === 0}>
+          <button onClick={() => act(() => engine().undo())} disabled={busy || history.length === 0}>
             Undo
           </button>
-          <button onClick={() => engine().reset()}>Reset</button>
+          <button onClick={() => act(() => engine().reset())}>Reset</button>
         </div>
+
+        <section className="physical">
+          <h2>Real cube</h2>
+          <div className="app-actions">
+            <button onClick={() => setImportOpen(true)}>Import cube</button>
+            <button
+              className="primary"
+              onClick={solveStepByStep}
+              disabled={busy || findingSolution || isSolved}
+              title="Find a short solution and walk through it move by move"
+            >
+              {findingSolution ? 'Finding…' : 'Solve step by step'}
+            </button>
+          </div>
+          {guideError && (
+            <p className="import-error" role="alert">
+              {guideError}
+            </p>
+          )}
+        </section>
 
         <label className="speed">
           Speed <span>{speed.toFixed(1)}×</span>
@@ -423,6 +541,12 @@ export default function App() {
       </aside>
 
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        getCurrentFacelets={() => engine().getFacelets()}
+        onApply={applyImport}
+      />
     </div>
   );
 }

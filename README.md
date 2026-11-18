@@ -9,6 +9,11 @@ Built with React, Vite and three.js.
 - **Simple** view control (one direction per drag, with horizontal/vertical angle sliders) or **Free**.
 - **Straighten** snaps the view back to an upright angle.
 - **Shuffle**, **Solve** (replays your moves in reverse), **Undo**, **Reset**.
+- **Import cube**: paint each face to match a physical cube (with checks for impossible
+  colourings), then follow the solution move by move.
+- **Solve step by step**: finds a short (~20 move) solution for the current cube with the
+  Kociemba two-phase solver ([cubejs](https://github.com/ldez/cubejs), run in a Web Worker)
+  and guides you through it with Back / Next / Play.
 - Progress is saved after every move and resumed when you come back.
 - Installable PWA that works fully offline, with its own install banner (or an
   "Add to Home Screen" tip on iPhone/iPad) and an "Install app" button in the panel.

@@ -39,7 +39,19 @@ function roundedSquare(size, radius) {
   return new THREE.ShapeGeometry(s, 4);
 }
 
-const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+// How each face is laid out in the Kociemba net: the outward normal, and the
+// directions that point right and up when looking at that face in the net.
+const v = (x, y, z) => new THREE.Vector3(x, y, z);
+const FACE_FRAMES = [
+  { letter: 'U', offset: 0, normal: v(0, 1, 0), right: v(1, 0, 0), up: v(0, 0, -1) },
+  { letter: 'R', offset: 9, normal: v(1, 0, 0), right: v(0, 0, -1), up: v(0, 1, 0) },
+  { letter: 'F', offset: 18, normal: v(0, 0, 1), right: v(1, 0, 0), up: v(0, 1, 0) },
+  { letter: 'D', offset: 27, normal: v(0, -1, 0), right: v(1, 0, 0), up: v(0, 0, 1) },
+  { letter: 'L', offset: 36, normal: v(-1, 0, 0), right: v(0, 0, 1), up: v(0, 1, 0) },
+  { letter: 'B', offset: 45, normal: v(0, 0, -1), right: v(-1, 0, 0), up: v(0, 1, 0) },
+];
+
+const easeInOut =(t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export class CubeEngine {
   /**
@@ -351,6 +363,33 @@ export class CubeEngine {
     if (this.isSolved()) this.history = [];
   }
 
+  /**
+   * Reads the cube as a 54-character facelet string in Kociemba URFDLB order
+   * (see solver/facelets.js). Each sticker is named after the face whose
+   * centre has its colour.
+   */
+  getFacelets() {
+    const out = new Array(54);
+    const n = new THREE.Vector3();
+    const stickers = [];
+    const centerFace = {}; // sticker colour key -> face letter of that centre
+
+    for (const cubie of this.cubies) {
+      const p = cubie.position;
+      for (const { normal, color } of cubie.userData.stickers) {
+        n.copy(normal).applyQuaternion(cubie.quaternion).round();
+        const face = FACE_FRAMES.find((fr) => fr.normal.equals(n));
+        const col = Math.round(p.dot(face.right)) + 1;
+        const row = 1 - Math.round(p.dot(face.up));
+        const index = face.offset + row * 3 + col;
+        stickers.push([index, color]);
+        if (row === 1 && col === 1) centerFace[color] = face.letter;
+      }
+    }
+    for (const [index, color] of stickers) out[index] = centerFace[color];
+    return out.join('');
+  }
+
   isSolved() {
     const seen = {};
     const n = new THREE.Vector3();
@@ -449,7 +488,10 @@ export class CubeEngine {
       if (g.type === 'turn') {
         if (Math.hypot(dx, dy) < threshold) return;
         const m = this.#moveFromDrag(g, dx, dy);
-        if (m) this.move(m);
+        if (m) {
+          this.move(m);
+          this.onUserMove?.(m);
+        }
         this.gesture = { type: 'done' };
         return;
       }
