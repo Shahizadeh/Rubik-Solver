@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { CubeEngine } from './cube/CubeEngine.js';
 import { parseMove, parseSequence } from './cube/notation.js';
 import { loadCube, saveCube } from './storage.js';
+import { usePwa } from './pwa/usePwa.js';
+import ShareDialog from './components/ShareDialog.jsx';
 import './App.css';
+
+const ShareIcon = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <path
+      d="M18 16.1c-.8 0-1.4.3-2 .8l-7.1-4.2c.1-.2.1-.5.1-.7s0-.5-.1-.7L16 7.2c.5.5 1.2.8 2 .8 1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3c0 .2 0 .5.1.7L8 9.8C7.5 9.3 6.8 9 6 9c-1.7 0-3 1.3-3 3s1.3 3 3 3c.8 0 1.5-.3 2-.8l7.1 4.2c-.1.2-.1.4-.1.6 0 1.6 1.3 2.9 2.9 2.9s2.9-1.3 2.9-2.9-1.2-2.9-2.8-2.9Z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 const FACE_BUTTONS = ['U', 'D', 'L', 'R', 'F', 'B', 'M', 'E', 'S'];
 
@@ -65,6 +76,8 @@ export default function App() {
   const panelRef = useRef(null);
   const [drawerHeight, setDrawerHeight] = useState(0);
   const [angle, setAngle] = useState(loadAngle);
+  const [shareOpen, setShareOpen] = useState(false);
+  const pwa = usePwa();
 
   // Read the saved cube once; kept in state so React's dev double-mount
   // restores the same save both times.
@@ -139,6 +152,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT') return;
+      if (e.target.closest?.('dialog')) return; // keys inside the share dialog
       const letter = e.key.toUpperCase();
       if (FACE_BUTTONS.includes(letter)) {
         turn(e.shiftKey ? `${letter}'` : letter);
@@ -170,19 +184,53 @@ export default function App() {
       <div className="viewport" ref={mountRef}>
         <div className={`status ${isSolved && !busy ? 'ok' : ''}`}>{status}</div>
 
-        {resumed && (
-          <div className="toast" role="status">
-            <span>Resumed your saved cube</span>
-            <button
-              onClick={() => {
-                engine().reset();
-                setResumed(false);
-              }}
-            >
-              Start fresh
-            </button>
-          </div>
-        )}
+        {/* Stacked notices: resume, app update, install. */}
+        <div className="notices">
+          {resumed && (
+            <div className="toast" role="status">
+              <span>Resumed your saved cube</span>
+              <button
+                onClick={() => {
+                  engine().reset();
+                  setResumed(false);
+                }}
+              >
+                Start fresh
+              </button>
+            </div>
+          )}
+
+          {pwa.needRefresh && (
+            <div className="toast" role="alert">
+              <span>A new version is available</span>
+              <button className="primary" onClick={pwa.update}>
+                Update
+              </button>
+              <button onClick={pwa.dismissUpdate}>Later</button>
+            </div>
+          )}
+
+          {pwa.showInstallBanner && (
+            <div className="toast" role="status">
+              <span>Install the app for quick, offline play</span>
+              <button className="primary" onClick={pwa.install}>
+                Install
+              </button>
+              <button onClick={pwa.dismissInstall}>Not now</button>
+            </div>
+          )}
+
+          {pwa.showIosTip && (
+            <div className="toast" role="status">
+              <span>
+                Install: tap <strong>Share</strong> then <strong>Add to Home Screen</strong>
+              </span>
+              <button onClick={pwa.dismissInstall} aria-label="Dismiss install tip">
+                OK
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="mode-toggle" role="radiogroup" aria-label="View control">
           {[
@@ -220,20 +268,32 @@ export default function App() {
             <span>{panelOpen ? 'Hide' : 'Controls'}</span>
           </button>
 
-          <button
-            className="straighten"
-            onClick={() => engine().straighten()}
-            title="Straighten view (Space)"
-            aria-label="Straighten view"
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path
-                d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
-                fill="currentColor"
-              />
-            </svg>
-            <span>Straighten</span>
-          </button>
+          <div className="fab-group">
+            <button
+              className="fab"
+              onClick={() => setShareOpen(true)}
+              title="Share with a QR code"
+              aria-label="Share app"
+            >
+              <ShareIcon />
+              <span>Share</span>
+            </button>
+
+            <button
+              className="fab"
+              onClick={() => engine().straighten()}
+              title="Straighten view (Space)"
+              aria-label="Straighten view"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path
+                  d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span>Straighten</span>
+            </button>
+          </div>
         </div>
 
         <p className="hint">
@@ -346,7 +406,23 @@ export default function App() {
           </h2>
           <div className="seq">{solution.length ? solution.join(' ') : '—'}</div>
         </section>
+
+        <section>
+          <h2>App</h2>
+          <div className="app-actions">
+            <button onClick={() => setShareOpen(true)}>
+              <ShareIcon /> Share
+            </button>
+            {pwa.canInstall && (
+              <button className="primary" onClick={pwa.install}>
+                Install app
+              </button>
+            )}
+          </div>
+        </section>
       </aside>
+
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

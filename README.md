@@ -10,7 +10,11 @@ Built with React, Vite and three.js.
 - **Straighten** snaps the view back to an upright angle.
 - **Shuffle**, **Solve** (replays your moves in reverse), **Undo**, **Reset**.
 - Progress is saved after every move and resumed when you come back.
-- Installable PWA that works fully offline.
+- Installable PWA that works fully offline, with its own install banner (or an
+  "Add to Home Screen" tip on iPhone/iPad) and an "Install app" button in the panel.
+- When a new version is deployed, open apps show a "New version available — Update" banner
+  (open apps also check for updates hourly).
+- **Share** opens a QR code of the app's link, with copy, native share and PNG download.
 
 ## Develop
 

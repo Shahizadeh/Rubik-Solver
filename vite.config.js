@@ -7,8 +7,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // New versions install in the background and take over on next load.
-      registerType: 'autoUpdate',
+      // New versions download in the background, then the app asks the
+      // user before switching (see src/pwa/usePwa.js).
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
       manifest: {
         name: "Rubik's Cube 3D",
