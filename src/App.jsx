@@ -44,6 +44,8 @@ export default function App() {
   const [state, setState] = useState(INITIAL_STATE);
   const [speed, setSpeed] = useState(1);
   const [mode, setMode] = useState(loadMode);
+  // Phones only: the control panel is hidden until the floating button opens it.
+  const [panelOpen, setPanelOpen] = useState(false);
   const [angle, setAngle] = useState(loadAngle);
 
   // Read the saved cube once; kept in state so React's dev double-mount
@@ -129,7 +131,7 @@ export default function App() {
   else status = 'Scrambled';
 
   return (
-    <div className="app">
+    <div className={`app ${panelOpen ? 'panel-open' : ''}`}>
       <div className="viewport" ref={mountRef}>
         <div className={`status ${isSolved && !busy ? 'ok' : ''}`}>{status}</div>
 
@@ -180,6 +182,25 @@ export default function App() {
           <span>Straighten</span>
         </button>
 
+        <button
+          className="panel-toggle"
+          onClick={() => setPanelOpen((o) => !o)}
+          aria-expanded={panelOpen}
+          aria-controls="panel"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            {panelOpen ? (
+              <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" fill="currentColor" />
+            ) : (
+              <path
+                d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"
+                fill="currentColor"
+              />
+            )}
+          </svg>
+          <span>{panelOpen ? 'Hide' : 'Controls'}</span>
+        </button>
+
         <p className="hint">
           <span className="fine">
             Drag a face to turn it · drag the background to rotate · scroll to zoom
@@ -190,7 +211,7 @@ export default function App() {
         </p>
       </div>
 
-      <aside className="panel">
+      <aside className="panel" id="panel">
         <h1>Rubik&apos;s Cube</h1>
 
         <div className="actions">
