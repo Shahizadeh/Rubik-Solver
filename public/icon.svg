@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1115"/>
+  <!-- Isometric 3x3 cube: top (white), left (green), right (red) -->
+  <g stroke="#0f1115" stroke-width="10" stroke-linejoin="round">
+    <g fill="#ffffff">
+      <path d="M256 76 L310 107 L256 138 L202 107 Z"/>
+      <path d="M310 107 L364 138 L310 169 L256 138 Z"/>
+      <path d="M364 138 L418 169 L364 200 L310 169 Z"/>
+      <path d="M202 107 L256 138 L202 169 L148 138 Z"/>
+      <path d="M256 138 L310 169 L256 200 L202 169 Z"/>
+      <path d="M310 169 L364 200 L310 231 L256 200 Z"/>
+      <path d="M148 138 L202 169 L148 200 L94 169 Z"/>
+      <path d="M202 169 L256 200 L202 231 L148 200 Z"/>
+      <path d="M256 200 L310 231 L256 262 L202 231 Z"/>
+    </g>
+    <g fill="#009e60">
+      <path d="M94 169 L148 200 L148 262 L94 231 Z"/>
+      <path d="M148 200 L202 231 L202 293 L148 262 Z"/>
+      <path d="M202 231 L256 262 L256 324 L202 293 Z"/>
+      <path d="M94 231 L148 262 L148 324 L94 293 Z"/>
+      <path d="M148 262 L202 293 L202 355 L148 324 Z"/>
+      <path d="M202 293 L256 324 L256 386 L202 355 Z"/>
+      <path d="M94 293 L148 324 L148 386 L94 355 Z"/>
+      <path d="M148 324 L202 355 L202 417 L148 386 Z"/>
+      <path d="M202 355 L256 386 L256 448 L202 417 Z"/>
+    </g>
+    <g fill="#c41e3a">
+      <path d="M256 262 L310 231 L310 293 L256 324 Z"/>
+      <path d="M310 231 L364 200 L364 262 L310 293 Z"/>
+      <path d="M364 200 L418 169 L418 231 L364 262 Z"/>
+      <path d="M256 324 L310 293 L310 355 L256 386 Z"/>
+      <path d="M310 293 L364 262 L364 324 L310 355 Z"/>
+      <path d="M364 262 L418 231 L418 293 L364 324 Z"/>
+      <path d="M256 386 L310 355 L310 417 L256 448 Z"/>
+      <path d="M310 355 L364 324 L364 386 L310 417 Z"/>
+      <path d="M364 324 L418 293 L418 355 L364 386 Z"/>
+    </g>
+  </g>
+</svg>
