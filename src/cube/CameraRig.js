@@ -33,10 +33,14 @@ export class CameraRig {
     this.fit();
   }
 
-  /** Recomputes the distance at which the whole cube fits the viewport. */
-  fit() {
-    const vfov = THREE.MathUtils.degToRad(this.camera.fov);
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
+  /**
+   * Recomputes the distance at which the whole cube fits the viewport.
+   * `visibleFraction` is the share of the height not covered by overlays.
+   */
+  fit(visibleFraction = 1) {
+    const fullV = THREE.MathUtils.degToRad(this.camera.fov);
+    const vfov = 2 * Math.atan(Math.tan(fullV / 2) * visibleFraction);
+    const hfov = 2 * Math.atan(Math.tan(fullV / 2) * this.camera.aspect);
     this.fitDistance = CUBE_RADIUS / Math.sin(Math.min(vfov, hfov) / 2);
   }
 

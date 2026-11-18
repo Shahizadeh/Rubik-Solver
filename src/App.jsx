@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CubeEngine } from './cube/CubeEngine.js';
 import { parseMove, parseSequence } from './cube/notation.js';
 import { loadCube, saveCube } from './storage.js';
@@ -29,6 +29,20 @@ function loadAngle() {
   return DEFAULT_ANGLE;
 }
 
+// Must match the phone breakpoint in App.css.
+const PHONE_QUERY = '(max-width: 760px)';
+
+function useMediaQuery(query) {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener('change', onChange);
+      return () => mql.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia(query).matches,
+  );
+}
+
 const INITIAL_STATE = {
   busy: false,
   solving: false,
@@ -44,8 +58,12 @@ export default function App() {
   const [state, setState] = useState(INITIAL_STATE);
   const [speed, setSpeed] = useState(1);
   const [mode, setMode] = useState(loadMode);
-  // Phones only: the control panel is hidden until the floating button opens it.
+  // Phones only: the control panel is a drawer, closed until the floating
+  // button opens it. It slides over the cube view, which keeps its size.
   const [panelOpen, setPanelOpen] = useState(false);
+  const isPhone = useMediaQuery(PHONE_QUERY);
+  const panelRef = useRef(null);
+  const [drawerHeight, setDrawerHeight] = useState(0);
   const [angle, setAngle] = useState(loadAngle);
 
   // Read the saved cube once; kept in state so React's dev double-mount
@@ -81,6 +99,20 @@ export default function App() {
   useEffect(() => {
     engineRef.current?.setSpeed(speed);
   }, [speed]);
+
+  // Track the drawer's height (its content can grow, e.g. the move history).
+  useEffect(() => {
+    const el = panelRef.current;
+    const ro = new ResizeObserver(() => setDrawerHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // How much of the cube view the open drawer covers on phones.
+  const bottomInset = isPhone && panelOpen ? drawerHeight : 0;
+  useEffect(() => {
+    engineRef.current?.setBottomInset(bottomInset);
+  }, [bottomInset]);
 
   useEffect(() => {
     engineRef.current?.setControlMode(mode);
@@ -131,7 +163,10 @@ export default function App() {
   else status = 'Scrambled';
 
   return (
-    <div className={`app ${panelOpen ? 'panel-open' : ''}`}>
+    <div
+      className={`app ${panelOpen ? 'panel-open' : ''}`}
+      style={{ '--drawer-offset': `${bottomInset}px` }}
+    >
       <div className="viewport" ref={mountRef}>
         <div className={`status ${isSolved && !busy ? 'ok' : ''}`}>{status}</div>
 
@@ -167,39 +202,39 @@ export default function App() {
           ))}
         </div>
 
-        <button
-          className="straighten"
-          onClick={() => engine().straighten()}
-          title="Straighten view (Space)"
-          aria-label="Straighten view"
-        >
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
-              fill="currentColor"
-            />
-          </svg>
-          <span>Straighten</span>
-        </button>
+        {/* Floating buttons; on phones they ride up with the drawer. */}
+        <div className="fabs">
+          <button
+            className="panel-toggle"
+            onClick={() => setPanelOpen((o) => !o)}
+            aria-expanded={panelOpen}
+            aria-controls="panel"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              {panelOpen ? (
+                <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" fill="currentColor" />
+              ) : (
+                <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" fill="currentColor" />
+              )}
+            </svg>
+            <span>{panelOpen ? 'Hide' : 'Controls'}</span>
+          </button>
 
-        <button
-          className="panel-toggle"
-          onClick={() => setPanelOpen((o) => !o)}
-          aria-expanded={panelOpen}
-          aria-controls="panel"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            {panelOpen ? (
-              <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" fill="currentColor" />
-            ) : (
+          <button
+            className="straighten"
+            onClick={() => engine().straighten()}
+            title="Straighten view (Space)"
+            aria-label="Straighten view"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               <path
-                d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"
+                d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3ZM5 9.7l6 3.4v6.6l-6-3.4V9.7Zm8 10v-6.6l6-3.4v6.6l-6 3.4Z"
                 fill="currentColor"
               />
-            )}
-          </svg>
-          <span>{panelOpen ? 'Hide' : 'Controls'}</span>
-        </button>
+            </svg>
+            <span>Straighten</span>
+          </button>
+        </div>
 
         <p className="hint">
           <span className="fine">
@@ -211,7 +246,7 @@ export default function App() {
         </p>
       </div>
 
-      <aside className="panel" id="panel">
+      <aside className="panel" id="panel" ref={panelRef} inert={isPhone && !panelOpen}>
         <h1>Rubik&apos;s Cube</h1>
 
         <div className="actions">

@@ -98,10 +98,40 @@ export class CubeEngine {
   #resize() {
     const { clientWidth: w, clientHeight: h } = this.container;
     if (!w || !h) return;
+    this.size = { w, h };
     this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
-    this.rig.fit();
+    this.#applyInset();
+  }
+
+  /**
+   * Reserves `px` pixels at the bottom of the view (e.g. a drawer covering
+   * it). The cube glides up and shrinks to fit the space that is left.
+   */
+  setBottomInset(px) {
+    this.insetTarget = Math.max(0, px);
+  }
+
+  #updateInset(dt) {
+    const target = this.insetTarget ?? 0;
+    this.inset ??= 0;
+    if (this.inset === target) return;
+    // Exponential ease that settles in ~300 ms, matching the drawer's CSS slide.
+    this.inset += (target - this.inset) * (1 - Math.exp(-dt / 70));
+    if (Math.abs(target - this.inset) < 0.5) this.inset = target;
+    this.#applyInset();
+  }
+
+  #applyInset() {
+    const { w, h } = this.size ?? { w: 0, h: 0 };
+    if (!w || !h) return;
+    const inset = Math.min(this.inset ?? 0, h * 0.8);
+    // Shifting the view window down by half the inset moves the picture up,
+    // centring the cube in the uncovered area.
+    if (inset > 0) this.camera.setViewOffset(w, h, 0, inset / 2, w, h);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
+    this.rig.fit((h - inset) / h);
   }
 
   #buildCube() {
@@ -345,6 +375,7 @@ export class CubeEngine {
       if (t >= 1) this.#finishCurrent();
       else this.pivot.rotation[c.move.axis] = c.angle * easeInOut(t);
     }
+    this.#updateInset(dt);
     this.rig.update(dt);
     this.renderer.render(this.scene, this.camera);
   }

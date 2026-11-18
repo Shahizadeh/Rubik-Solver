@@ -36,7 +36,6 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   animation: toast-in 0.25s ease-out;
 }
 .toast button { border-radius: 999px; padding: 6px 12px; min-height: 32px; }
-@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 
 .mode-toggle {
@@ -51,8 +50,15 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 }
 .mode-toggle button.active { background: var(--accent); color: #fff; }
 
+.fabs {
+  position: absolute; left: 12px; right: 12px; bottom: 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  pointer-events: none;
+}
+.fabs > button { pointer-events: auto; }
+
 .straighten {
-  position: absolute; right: 12px; bottom: 40px;
+  margin-left: auto;
   display: flex; align-items: center; gap: 8px;
   min-height: 44px; padding: 0 16px; border-radius: 999px;
   background: rgba(23, 26, 33, 0.85); backdrop-filter: blur(6px);
@@ -128,25 +134,48 @@ button:active:not(:disabled) { transform: scale(0.96); }
   font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--text-h);
 }
 
-/* Phones and narrow windows: cube on top, controls below. */
 .panel-toggle { display: none; }
 
+/* Phones and narrow windows: the cube fills the screen and the controls live
+   in a bottom drawer that slides over it. The cube view never resizes (so
+   nothing jumps); instead the engine glides the cube up into the space left
+   above the drawer, and the floating buttons ride up with the drawer. */
 @media (max-width: 760px) {
-  /* The cube fills the screen; the panel is hidden until the floating
-     Controls button opens it, then the cube area shrinks to make room so
-     the whole cube stays visible and can still be turned. */
-  .app { flex-direction: column; }
-  .viewport { flex: 1; min-height: 0; }
+  .app { --drawer-ease: 0.32s cubic-bezier(0.32, 0.72, 0, 1); }
+  .viewport { flex: 1; }
+
   .panel {
-    display: none; flex: none; width: 100%; max-height: 52vh; max-height: 52dvh;
-    padding: 16px 16px 24px; border-left: none; border-top: 1px solid var(--border);
-    border-radius: 16px 16px 0 0; overscroll-behavior: contain;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    width: auto; max-height: 52vh; max-height: 52dvh;
+    padding: 22px 16px calc(20px + env(safe-area-inset-bottom));
+    border-left: none; border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+    overscroll-behavior: contain;
+    transform: translateY(100%);
+    visibility: hidden;
+    transition: transform var(--drawer-ease), visibility 0s linear 0.32s;
   }
-  .app.panel-open .panel { display: block; animation: sheet-in 0.22s ease-out; }
+  .app.panel-open .panel {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform var(--drawer-ease), visibility 0s;
+  }
+  /* Grab-handle look at the top of the drawer. */
+  .panel::before {
+    content: ''; position: absolute; top: 8px; left: 50%;
+    width: 40px; height: 4px; margin-left: -20px;
+    border-radius: 2px; background: var(--border);
+  }
   .panel h1 { display: none; }
 
+  .fabs {
+    bottom: 16px;
+    transform: translateY(calc(-1 * var(--drawer-offset, 0px)));
+    transition: transform var(--drawer-ease);
+  }
+
   .panel-toggle {
-    position: absolute; left: 12px; bottom: 16px;
     display: flex; align-items: center; gap: 6px;
     min-height: 48px; padding: 0 18px; border-radius: 999px;
     background: var(--accent); border-color: var(--accent); font-weight: 600;
@@ -155,10 +184,10 @@ button:active:not(:disabled) { transform: scale(0.96); }
   .app.panel-open .panel-toggle { background: rgba(23, 26, 33, 0.85); border-color: var(--border); }
 
   .status { top: 12px; left: 12px; }
-  .straighten { width: 48px; height: 48px; padding: 0; justify-content: center; bottom: 16px; }
+  .straighten { width: 48px; height: 48px; padding: 0; justify-content: center; }
   .straighten span { display: none; }
-  .hint { font-size: 12px; bottom: 74px; }
-  .app.panel-open .hint { display: none; }
+  .hint { font-size: 12px; bottom: 74px; transition: opacity 0.2s; }
+  .app.panel-open .hint { opacity: 0; }
   .actions { grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .actions button { padding: 8px 4px; }
   .moves { gap: 3px; }
